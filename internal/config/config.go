@@ -44,6 +44,8 @@ const (
 	DefaultWarnLedgers = 120_960
 	// DefaultCriticalLedgers is ~1 day at 5s per ledger.
 	DefaultCriticalLedgers = 17_280
+	// DefaultMaxRetries is the default number of retries for transient RPC failures.
+	DefaultMaxRetries = 2
 )
 
 // Environment variable names.
@@ -59,6 +61,7 @@ const (
 	EnvCriticalLedgers   = "CRITICAL_LEDGERS"
 	EnvConfigFile        = "SOROPROBE_CONFIG"
 	EnvSoroVaultURL      = "SOROVAULT_URL"
+	EnvRPCRetries        = "RPC_RETRIES"
 )
 
 // Config holds every setting SoroProbe needs.
@@ -87,6 +90,8 @@ type Config struct {
 	// SoroVaultURL, when set, is a SoroVault registry whose recorded contract
 	// interfaces type simulate arguments. Empty disables the lookup.
 	SoroVaultURL string `json:"sorovault_url"`
+	// Retries is the number of times transient RPC failures are retried. 0 disables retries.
+	Retries int `json:"retries"`
 }
 
 // Default returns a Config populated entirely from the package defaults.
@@ -100,6 +105,7 @@ func Default() Config {
 		Timeout:           DefaultTimeout,
 		WarnLedgers:       DefaultWarnLedgers,
 		CriticalLedgers:   DefaultCriticalLedgers,
+		Retries:           DefaultMaxRetries,
 	}
 }
 
@@ -115,6 +121,7 @@ type fileConfig struct {
 	WarnLedgers       *uint32 `json:"warn_ledgers"`
 	CriticalLedgers   *uint32 `json:"critical_ledgers"`
 	SoroVaultURL      *string `json:"sorovault_url"`
+	Retries           *int    `json:"retries"`
 }
 
 // Load builds a Config from defaults, then the config file at path (if
@@ -170,6 +177,9 @@ func applyFile(cfg *Config, path string, required bool) error {
 	if fc.CriticalLedgers != nil {
 		cfg.CriticalLedgers = *fc.CriticalLedgers
 	}
+	if fc.Retries != nil {
+		cfg.Retries = *fc.Retries
+	}
 	if fc.Timeout != nil {
 		d, err := time.ParseDuration(*fc.Timeout)
 		if err != nil {
@@ -206,7 +216,17 @@ func applyEnv(cfg *Config) error {
 	if err := setUint32FromEnv(&cfg.WarnLedgers, EnvWarnLedgers); err != nil {
 		return err
 	}
-	return setUint32FromEnv(&cfg.CriticalLedgers, EnvCriticalLedgers)
+	if err := setUint32FromEnv(&cfg.CriticalLedgers, EnvCriticalLedgers); err != nil {
+		return err
+	}
+	if v := lookup(EnvRPCRetries); v != nil {
+		n, err := strconv.Atoi(*v)
+		if err != nil {
+			return fmt.Errorf("parse %s: %w", EnvRPCRetries, err)
+		}
+		cfg.Retries = n
+	}
+	return nil
 }
 
 func setUint32FromEnv(dst *uint32, key string) error {
@@ -252,6 +272,9 @@ func (c Config) Validate() error {
 	}
 	if c.Timeout <= 0 {
 		return fmt.Errorf("timeout must be positive, got %s", c.Timeout)
+	}
+	if c.Retries < 0 {
+		return fmt.Errorf("retries cannot be negative, got %d", c.Retries)
 	}
 	if c.CriticalLedgers > c.WarnLedgers {
 		return fmt.Errorf("critical threshold (%d) must not exceed warning threshold (%d)",

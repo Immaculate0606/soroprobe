@@ -66,6 +66,7 @@ well-formed transaction, and that account need not exist or hold a balance.`,
 	flags.String("source-account", "", fmt.Sprintf("public key used to build transactions for simulation (env %s)", config.EnvSourceAccount))
 	flags.String("log-level", "", fmt.Sprintf("debug, info, warn or error (env %s)", config.EnvLogLevel))
 	flags.Duration("timeout", 0, fmt.Sprintf("per-request RPC timeout (env %s)", config.EnvTimeout))
+	flags.Int("retries", config.DefaultMaxRetries, fmt.Sprintf("number of retries for transient RPC errors (env %s)", config.EnvRPCRetries))
 	flags.Uint32("warn-ledgers", 0, "flag entries with fewer than this many ledgers of TTL left")
 	flags.Uint32("critical-ledgers", 0, "treat entries with fewer than this many ledgers of TTL left as critical")
 	flags.String("sorovault-url", "", fmt.Sprintf("SoroVault registry used to type simulate arguments from the contract's interface (env %s)", config.EnvSoroVaultURL))
@@ -105,6 +106,9 @@ func (o *options) resolve(cmd *cobra.Command) error {
 	if flags.Changed("timeout") {
 		cfg.Timeout, _ = flags.GetDuration("timeout")
 	}
+	if flags.Changed("retries") {
+		cfg.Retries, _ = flags.GetInt("retries")
+	}
 	if flags.Changed("warn-ledgers") {
 		cfg.WarnLedgers, _ = flags.GetUint32("warn-ledgers")
 	}
@@ -140,6 +144,7 @@ func newLiveProber(cfg config.Config) (*probe.Prober, func(), error) {
 		URL:     cfg.RPCURL,
 		Timeout: cfg.Timeout,
 		Logger:  log,
+		Retries: cfg.Retries,
 	})
 	if err != nil {
 		return nil, nil, err
