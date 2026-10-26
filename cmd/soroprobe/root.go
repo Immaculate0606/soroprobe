@@ -69,6 +69,7 @@ well-formed transaction, and that account need not exist or hold a balance.`,
 	flags.Uint32("warn-ledgers", 0, "flag entries with fewer than this many ledgers of TTL left")
 	flags.Uint32("critical-ledgers", 0, "treat entries with fewer than this many ledgers of TTL left as critical")
 	flags.String("sorovault-url", "", fmt.Sprintf("SoroVault registry used to type simulate arguments from the contract's interface (env %s)", config.EnvSoroVaultURL))
+	flags.String("abi-file", "", fmt.Sprintf("local interface JSON file used to type simulate arguments (env %s)", config.EnvABIFile))
 	flags.BoolVar(&opts.jsonOut, "json", false, "emit JSON instead of human-readable output")
 
 	cmd.AddCommand(
@@ -114,6 +115,9 @@ func (o *options) resolve(cmd *cobra.Command) error {
 	if flags.Changed("sorovault-url") {
 		cfg.SoroVaultURL, _ = flags.GetString("sorovault-url")
 	}
+	if flags.Changed("abi-file") {
+		cfg.ABIFile, _ = flags.GetString("abi-file")
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -153,6 +157,13 @@ func newLiveProber(cfg config.Config) (*probe.Prober, func(), error) {
 			return nil, nil, err
 		}
 		source = vault
+	} else if cfg.ABIFile != "" {
+		fileSrc, err := abi.NewFileSource(cfg.ABIFile)
+		if err != nil {
+			_ = client.Close()
+			return nil, nil, err
+		}
+		source = fileSrc
 	}
 
 	p, err := probe.New(probe.Options{

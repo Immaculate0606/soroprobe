@@ -59,6 +59,7 @@ const (
 	EnvCriticalLedgers   = "CRITICAL_LEDGERS"
 	EnvConfigFile        = "SOROPROBE_CONFIG"
 	EnvSoroVaultURL      = "SOROVAULT_URL"
+	EnvABIFile           = "ABI_FILE"
 )
 
 // Config holds every setting SoroProbe needs.
@@ -87,6 +88,9 @@ type Config struct {
 	// SoroVaultURL, when set, is a SoroVault registry whose recorded contract
 	// interfaces type simulate arguments. Empty disables the lookup.
 	SoroVaultURL string `json:"sorovault_url"`
+	// ABIFile, when set, is a path to a local interface JSON file whose
+	// interface types simulate arguments for any contract ID.
+	ABIFile string `json:"abi_file"`
 }
 
 // Default returns a Config populated entirely from the package defaults.
@@ -115,6 +119,7 @@ type fileConfig struct {
 	WarnLedgers       *uint32 `json:"warn_ledgers"`
 	CriticalLedgers   *uint32 `json:"critical_ledgers"`
 	SoroVaultURL      *string `json:"sorovault_url"`
+	ABIFile           *string `json:"abi_file"`
 }
 
 // Load builds a Config from defaults, then the config file at path (if
@@ -164,6 +169,7 @@ func applyFile(cfg *Config, path string, required bool) error {
 	setString(&cfg.HTTPAddr, fc.HTTPAddr)
 	setString(&cfg.LogLevel, fc.LogLevel)
 	setString(&cfg.SoroVaultURL, fc.SoroVaultURL)
+	setString(&cfg.ABIFile, fc.ABIFile)
 	if fc.WarnLedgers != nil {
 		cfg.WarnLedgers = *fc.WarnLedgers
 	}
@@ -195,6 +201,7 @@ func applyEnv(cfg *Config) error {
 	}
 	setString(&cfg.LogLevel, lookup(EnvLogLevel))
 	setString(&cfg.SoroVaultURL, lookup(EnvSoroVaultURL))
+	setString(&cfg.ABIFile, lookup(EnvABIFile))
 
 	if v := lookup(EnvTimeout); v != nil {
 		d, err := time.ParseDuration(*v)
@@ -263,6 +270,9 @@ func (c Config) Validate() error {
 	if c.SoroVaultURL != "" &&
 		!strings.HasPrefix(c.SoroVaultURL, "http://") && !strings.HasPrefix(c.SoroVaultURL, "https://") {
 		return fmt.Errorf("sorovault url %q must start with http:// or https://", c.SoroVaultURL)
+	}
+	if c.SoroVaultURL != "" && c.ABIFile != "" {
+		return errors.New("giving both --abi-file and --sorovault-url is an error")
 	}
 	return nil
 }
