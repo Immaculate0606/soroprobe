@@ -210,7 +210,9 @@ days" means something very different for a temporary entry than a persistent one
 | `missing` | No such entry exists on the ledger |
 | `unknown` | Entry exists but reported no TTL |
 
-Thresholds are configurable with `--warn-ledgers` and `--critical-ledgers`.
+Thresholds are configurable with `--warn` / `--warn-ledgers` and `--critical` / `--critical-ledgers`.
+`--warn` and `--critical` accept durations (e.g. `7d`, `36h`, `2h30m`) and convert them to ledgers
+using the network's 5-second close time. Providing both the duration and ledger flags for the same threshold is an error.
 
 **A note on the time estimates.** SoroProbe converts ledgers to wall-clock time
 at the network's five-second target close time, which measured exactly 5.00s
@@ -477,7 +479,7 @@ Runs the HTTP API. It binds `127.0.0.1:8080` by default; `--addr` overrides
 ### Global flags
 
 `--json`, `--config`, `--rpc-url`, `--network-passphrase`, `--source-account`,
-`--log-level`, `--timeout`, `--warn-ledgers`, `--critical-ledgers`,
+`--log-level`, `--timeout`, `--warn`, `--critical`, `--warn-ledgers`, `--critical-ledgers`,
 `--sorovault-url`.
 
 ## Argument encoding

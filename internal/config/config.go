@@ -18,6 +18,8 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stellar/go-stellar-sdk/strkey"
+
+	"github.com/soroworks/soroprobe/internal/health"
 )
 
 // Defaults. These target the public testnet so that a fresh checkout can run
@@ -281,6 +283,51 @@ func ParseLogLevel(name string) (slog.Level, error) {
 	default:
 		return 0, fmt.Errorf("unknown log level %q (want debug, info, warn or error)", name)
 	}
+}
+
+// ParseThresholdDuration parses a duration string that may include days (e.g. "7d", "36h", "2h30m")
+// and converts it into ledgers using health.LedgerCloseTime.
+func ParseThresholdDuration(s string) (uint32, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("duration cannot be empty")
+	}
+
+	var totalDuration time.Duration
+
+	// Go's time.ParseDuration has no 'd' unit; handle days explicitly.
+	rest := s
+	if idx := strings.IndexByte(s, 'd'); idx != -1 {
+		dayStr := s[:idx]
+		days, err := strconv.ParseUint(dayStr, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse days in %q: %w", s, err)
+		}
+		totalDuration += time.Duration(days) * 24 * time.Hour
+		rest = s[idx+1:]
+	}
+
+	if rest != "" {
+		d, err := time.ParseDuration(rest)
+		if err != nil {
+			return 0, fmt.Errorf("parse duration %q: %w", s, err)
+		}
+		if d < 0 {
+			return 0, fmt.Errorf("duration %q cannot be negative", s)
+		}
+		totalDuration += d
+	}
+
+	if totalDuration < 0 {
+		return 0, fmt.Errorf("duration %q cannot be negative", s)
+	}
+
+	ledgers := uint64(totalDuration / health.LedgerCloseTime)
+	if ledgers > uint64(^uint32(0)) {
+		return 0, fmt.Errorf("duration %q exceeds maximum ledger count", s)
+	}
+
+	return uint32(ledgers), nil
 }
 
 // Logger builds the process logger described by this config.

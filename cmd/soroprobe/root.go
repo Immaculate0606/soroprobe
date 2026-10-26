@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -66,6 +67,8 @@ well-formed transaction, and that account need not exist or hold a balance.`,
 	flags.String("source-account", "", fmt.Sprintf("public key used to build transactions for simulation (env %s)", config.EnvSourceAccount))
 	flags.String("log-level", "", fmt.Sprintf("debug, info, warn or error (env %s)", config.EnvLogLevel))
 	flags.Duration("timeout", 0, fmt.Sprintf("per-request RPC timeout (env %s)", config.EnvTimeout))
+	flags.String("warn", "", `remaining-TTL warning threshold as a duration (e.g. "7d", "36h")`)
+	flags.String("critical", "", `remaining-TTL critical threshold as a duration (e.g. "1d", "12h")`)
 	flags.Uint32("warn-ledgers", 0, "flag entries with fewer than this many ledgers of TTL left")
 	flags.Uint32("critical-ledgers", 0, "treat entries with fewer than this many ledgers of TTL left as critical")
 	flags.String("sorovault-url", "", fmt.Sprintf("SoroVault registry used to type simulate arguments from the contract's interface (env %s)", config.EnvSoroVaultURL))
@@ -105,12 +108,39 @@ func (o *options) resolve(cmd *cobra.Command) error {
 	if flags.Changed("timeout") {
 		cfg.Timeout, _ = flags.GetDuration("timeout")
 	}
-	if flags.Changed("warn-ledgers") {
+	if flags.Changed("warn") && flags.Changed("warn-ledgers") {
+		return errors.New("giving both --warn and --warn-ledgers is an error")
+	}
+	if flags.Changed("critical") && flags.Changed("critical-ledgers") {
+		return errors.New("giving both --critical and --critical-ledgers is an error")
+	}
+
+	log := cfg.Logger(os.Stderr)
+
+	if flags.Changed("warn") {
+		str, _ := flags.GetString("warn")
+		ledgers, err := config.ParseThresholdDuration(str)
+		if err != nil {
+			return fmt.Errorf("invalid --warn duration: %w", err)
+		}
+		cfg.WarnLedgers = ledgers
+		log.Debug("converted warning threshold duration to ledgers", "duration", str, "ledgers", ledgers)
+	} else if flags.Changed("warn-ledgers") {
 		cfg.WarnLedgers, _ = flags.GetUint32("warn-ledgers")
 	}
-	if flags.Changed("critical-ledgers") {
+
+	if flags.Changed("critical") {
+		str, _ := flags.GetString("critical")
+		ledgers, err := config.ParseThresholdDuration(str)
+		if err != nil {
+			return fmt.Errorf("invalid --critical duration: %w", err)
+		}
+		cfg.CriticalLedgers = ledgers
+		log.Debug("converted critical threshold duration to ledgers", "duration", str, "ledgers", ledgers)
+	} else if flags.Changed("critical-ledgers") {
 		cfg.CriticalLedgers, _ = flags.GetUint32("critical-ledgers")
 	}
+
 	if flags.Changed("sorovault-url") {
 		cfg.SoroVaultURL, _ = flags.GetString("sorovault-url")
 	}
