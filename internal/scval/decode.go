@@ -247,100 +247,60 @@ func wordsToBigInt(words []uint64, signed bool) *big.Int {
 	return result
 }
 
-// FormatTokenAmount formats a raw integer amount as a decimal string scaled by
-// the given number of decimals, without using floating-point conversions.
-// If v cannot be interpreted as an integer or decimals is negative, ok is false.
-func FormatTokenAmount(v any, decimals int) (string, bool) {
-	if decimals < 0 {
-		return "", false
-	}
-	var raw string
-	switch val := v.(type) {
-	case int:
-		raw = strconv.Itoa(val)
-	case int8:
-		raw = strconv.FormatInt(int64(val), 10)
-	case int16:
-		raw = strconv.FormatInt(int64(val), 10)
-	case int32:
-		raw = strconv.FormatInt(int64(val), 10)
-	case int64:
-		raw = strconv.FormatInt(val, 10)
-	case uint:
-		raw = strconv.FormatUint(uint64(val), 10)
-	case uint8:
-		raw = strconv.FormatUint(uint64(val), 10)
-	case uint16:
-		raw = strconv.FormatUint(uint64(val), 10)
-	case uint32:
-		raw = strconv.FormatUint(uint64(val), 10)
-	case uint64:
-		raw = strconv.FormatUint(val, 10)
-	case *big.Int:
-		if val == nil {
-			return "", false
+// ToBigInt extracts the numeric value of any integer-like ScVal.
+func ToBigInt(v xdr.ScVal) (*big.Int, bool) {
+	switch v.Type {
+	case xdr.ScValTypeScvU32:
+		if v.U32 == nil {
+			return nil, false
 		}
-		raw = val.String()
-	case string:
-		// Integers wider than 32 bits are decoded as decimal strings.
-		val = strings.TrimSpace(val)
-		if val == "" {
-			return "", false
+		return new(big.Int).SetUint64(uint64(*v.U32)), true
+	case xdr.ScValTypeScvI32:
+		if v.I32 == nil {
+			return nil, false
 		}
-		digits := val
-		if digits[0] == '-' || digits[0] == '+' {
-			digits = digits[1:]
+		return big.NewInt(int64(*v.I32)), true
+	case xdr.ScValTypeScvU64:
+		if v.U64 == nil {
+			return nil, false
 		}
-		if digits == "" {
-			return "", false
+		return new(big.Int).SetUint64(uint64(*v.U64)), true
+	case xdr.ScValTypeScvI64:
+		if v.I64 == nil {
+			return nil, false
 		}
-		for i := 0; i < len(digits); i++ {
-			if digits[i] < '0' || digits[i] > '9' {
-				return "", false
-			}
+		return big.NewInt(int64(*v.I64)), true
+	case xdr.ScValTypeScvTimepoint:
+		if v.Timepoint == nil {
+			return nil, false
 		}
-		raw = val
+		return new(big.Int).SetUint64(uint64(*v.Timepoint)), true
+	case xdr.ScValTypeScvDuration:
+		if v.Duration == nil {
+			return nil, false
+		}
+		return new(big.Int).SetUint64(uint64(*v.Duration)), true
+	case xdr.ScValTypeScvU128:
+		if v.U128 == nil {
+			return nil, false
+		}
+		return wordsToBigInt([]uint64{uint64(v.U128.Hi), uint64(v.U128.Lo)}, false), true
+	case xdr.ScValTypeScvI128:
+		if v.I128 == nil {
+			return nil, false
+		}
+		return wordsToBigInt([]uint64{uint64(v.I128.Hi), uint64(v.I128.Lo)}, true), true //nolint:gosec // two's-complement words: the bit pattern is reinterpreted on purpose
+	case xdr.ScValTypeScvU256:
+		if v.U256 == nil {
+			return nil, false
+		}
+		return wordsToBigInt([]uint64{uint64(v.U256.HiHi), uint64(v.U256.HiLo), uint64(v.U256.LoHi), uint64(v.U256.LoLo)}, false), true
+	case xdr.ScValTypeScvI256:
+		if v.I256 == nil {
+			return nil, false
+		}
+		return wordsToBigInt([]uint64{uint64(v.I256.HiHi), uint64(v.I256.HiLo), uint64(v.I256.LoHi), uint64(v.I256.LoLo)}, true), true //nolint:gosec // two's-complement words: the bit pattern is reinterpreted on purpose
 	default:
-		return "", false
+		return nil, false
 	}
-
-	negative := false
-	if strings.HasPrefix(raw, "-") {
-		negative = true
-		raw = raw[1:]
-	} else if strings.HasPrefix(raw, "+") {
-		raw = raw[1:]
-	}
-
-	if decimals == 0 {
-		if negative && raw != "0" {
-			return "-" + raw, true
-		}
-		return raw, true
-	}
-
-	var integerPart, fracPart string
-	if len(raw) <= decimals {
-		integerPart = "0"
-		fracPart = strings.Repeat("0", decimals-len(raw)) + raw
-	} else {
-		integerPart = raw[:len(raw)-decimals]
-		fracPart = raw[len(raw)-decimals:]
-	}
-
-	formatted := integerPart + "." + fracPart
-	if negative {
-		// check if zero
-		isZero := integerPart == "0"
-		for i := 0; i < len(fracPart); i++ {
-			if fracPart[i] != '0' {
-				isZero = false
-				break
-			}
-		}
-		if !isZero {
-			formatted = "-" + formatted
-		}
-	}
-	return formatted, true
 }
