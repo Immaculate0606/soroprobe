@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
@@ -244,4 +245,102 @@ func wordsToBigInt(words []uint64, signed bool) *big.Int {
 		result.Sub(result, new(big.Int).Lsh(big.NewInt(1), uint(len(words)*64)))
 	}
 	return result
+}
+
+// FormatTokenAmount formats a raw integer amount as a decimal string scaled by
+// the given number of decimals, without using floating-point conversions.
+// If v cannot be interpreted as an integer or decimals is negative, ok is false.
+func FormatTokenAmount(v any, decimals int) (string, bool) {
+	if decimals < 0 {
+		return "", false
+	}
+	var raw string
+	switch val := v.(type) {
+	case int:
+		raw = strconv.Itoa(val)
+	case int8:
+		raw = strconv.FormatInt(int64(val), 10)
+	case int16:
+		raw = strconv.FormatInt(int64(val), 10)
+	case int32:
+		raw = strconv.FormatInt(int64(val), 10)
+	case int64:
+		raw = strconv.FormatInt(val, 10)
+	case uint:
+		raw = strconv.FormatUint(uint64(val), 10)
+	case uint8:
+		raw = strconv.FormatUint(uint64(val), 10)
+	case uint16:
+		raw = strconv.FormatUint(uint64(val), 10)
+	case uint32:
+		raw = strconv.FormatUint(uint64(val), 10)
+	case uint64:
+		raw = strconv.FormatUint(val, 10)
+	case *big.Int:
+		if val == nil {
+			return "", false
+		}
+		raw = val.String()
+	case string:
+		// Integers wider than 32 bits are decoded as decimal strings.
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return "", false
+		}
+		digits := val
+		if digits[0] == '-' || digits[0] == '+' {
+			digits = digits[1:]
+		}
+		if digits == "" {
+			return "", false
+		}
+		for i := 0; i < len(digits); i++ {
+			if digits[i] < '0' || digits[i] > '9' {
+				return "", false
+			}
+		}
+		raw = val
+	default:
+		return "", false
+	}
+
+	negative := false
+	if strings.HasPrefix(raw, "-") {
+		negative = true
+		raw = raw[1:]
+	} else if strings.HasPrefix(raw, "+") {
+		raw = raw[1:]
+	}
+
+	if decimals == 0 {
+		if negative && raw != "0" {
+			return "-" + raw, true
+		}
+		return raw, true
+	}
+
+	var integerPart, fracPart string
+	if len(raw) <= decimals {
+		integerPart = "0"
+		fracPart = strings.Repeat("0", decimals-len(raw)) + raw
+	} else {
+		integerPart = raw[:len(raw)-decimals]
+		fracPart = raw[len(raw)-decimals:]
+	}
+
+	formatted := integerPart + "." + fracPart
+	if negative {
+		// check if zero
+		isZero := integerPart == "0"
+		for i := 0; i < len(fracPart); i++ {
+			if fracPart[i] != '0' {
+				isZero = false
+				break
+			}
+		}
+		if !isZero {
+			formatted = "-" + formatted
+		}
+	}
+	return formatted, true
 }
