@@ -81,6 +81,7 @@ well-formed transaction, and that account need not exist or hold a balance.`,
 	flags.Uint32("data-warn-ledgers", 0, "warning threshold for data entries")
 	flags.Uint32("data-critical-ledgers", 0, "critical threshold for data entries")
 	flags.String("sorovault-url", "", fmt.Sprintf("SoroVault registry used to type simulate arguments from the contract's interface (env %s)", config.EnvSoroVaultURL))
+	flags.String("abi-file", "", fmt.Sprintf("path to a local ABI JSON file used to type simulate arguments (env %s)", config.EnvABIFile))
 	flags.BoolVar(&opts.abiFromChain, "abi-from-chain", false, "type simulate arguments from the contract interface stored on chain")
 	flags.Int64("base-fee", 0, fmt.Sprintf("base inclusion fee per operation in stroops (env %s) (default %d)", config.EnvBaseFee, config.DefaultBaseFee))
 	flags.BoolVar(&opts.jsonOut, "json", false, "emit JSON instead of human-readable output")
@@ -195,6 +196,9 @@ func (o *options) applyFlagOverrides(cmd *cobra.Command, cfg *config.Config) err
 	}
 	if flags.Changed("sorovault-url") {
 		cfg.SoroVaultURL, _ = flags.GetString("sorovault-url")
+	}
+	if flags.Changed("abi-file") {
+		cfg.ABIFile, _ = flags.GetString("abi-file")
 	}
 	// --api-token is declared on serve, but resolved here so that a token
 	// too short to be safe is rejected by Validate before the server starts.
