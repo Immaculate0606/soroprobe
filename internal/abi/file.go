@@ -19,7 +19,7 @@ var _ Source = (*FileSource)(nil)
 // The file format can be the raw Interface object (with "functions") or
 // the wrapper object containing an "interface" field (e.g. `sorovault get <id> --json`).
 func NewFileSource(path string) (*FileSource, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- path is user-supplied config
 	if err != nil {
 		return nil, fmt.Errorf("read abi file %s: %w", path, err)
 	}
