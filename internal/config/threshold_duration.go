@@ -25,7 +25,7 @@ func ParseThresholdDuration(s string) (uint32, error) {
 		return 0, fmt.Errorf("threshold duration must not be negative")
 	}
 
-	ledgers := uint32(total / health.LedgerCloseTime)
+	ledgers := uint32(total / health.LedgerCloseTime) // #nosec G115 -- value validated non-negative above
 	if total > 0 && ledgers == 0 {
 		ledgers = 1
 	}
