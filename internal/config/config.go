@@ -63,6 +63,9 @@ const (
 	DefaultCriticalLedgers = 17_280
 	// DefaultBaseFee is the network minimum base fee in stroops.
 	DefaultBaseFee = int64(100)
+	// DefaultMaxRetries is the number of times a transient RPC failure is
+	// retried before the call is considered failed.
+	DefaultMaxRetries = 3
 )
 
 // Environment variable names.
@@ -91,6 +94,7 @@ const (
 	EnvProfile                 = "SOROPROBE_PROFILE"
 	EnvHTTPRateLimitPerMinute  = "HTTP_RATE_LIMIT_PER_MINUTE"
 	EnvHTTPRateLimitBurst      = "HTTP_RATE_LIMIT_BURST"
+	EnvRPCRetries              = "RPC_RETRIES"
 	EnvHTTPTrustForwardedFor   = "HTTP_TRUST_FORWARDED_FOR"
 	EnvHTTPTLSCert             = "HTTP_TLS_CERT"
 	EnvHTTPTLSKey              = "HTTP_TLS_KEY"
@@ -155,6 +159,9 @@ type Config struct {
 
 	// BaseFee is the base inclusion fee per operation in stroops.
 	BaseFee int64 `json:"base_fee"`
+	// Retries is the maximum number of times a transient RPC failure is
+	// retried. Zero means no retries; negative values are rejected by Validate.
+	Retries int `json:"retries"`
 }
 
 // Default returns a Config populated entirely from the package defaults.
@@ -170,6 +177,7 @@ func Default() Config {
 		WarnLedgers:            DefaultWarnLedgers,
 		CriticalLedgers:        DefaultCriticalLedgers,
 		BaseFee:                DefaultBaseFee,
+		Retries:                DefaultMaxRetries,
 		HTTPRateLimitPerMinute: DefaultRateLimitPerMinute,
 		HTTPRateLimitBurst:     DefaultRateLimitBurst,
 	}
@@ -190,6 +198,7 @@ type fileConfig struct {
 	ThresholdOverrides     *health.ThresholdOverrides `json:"thresholds" yaml:"thresholds"`
 	SoroVaultURL           *string                    `json:"sorovault_url" yaml:"sorovault_url"`
 	BaseFee                *int64                     `json:"base_fee" yaml:"base_fee"`
+	Retries                *int                       `json:"retries" yaml:"retries"`
 	InspectCacheTTL        *string                    `json:"inspect_cache_ttl" yaml:"inspect_cache_ttl"`
 	HTTPRateLimitPerMinute *uint32                    `json:"http_rate_limit_per_minute" yaml:"http_rate_limit_per_minute"`
 	HTTPRateLimitBurst     *uint32                    `json:"http_rate_limit_burst" yaml:"http_rate_limit_burst"`
@@ -334,6 +343,9 @@ func applyValues(cfg *Config, path string, fc *fileConfig) error {
 	if fc.BaseFee != nil {
 		cfg.BaseFee = *fc.BaseFee
 	}
+	if fc.Retries != nil {
+		cfg.Retries = *fc.Retries
+	}
 	if fc.Timeout != nil {
 		d, err := time.ParseDuration(*fc.Timeout)
 		if err != nil {
@@ -457,6 +469,9 @@ func applyEnvWith(cfg *Config, networkEnv bool) error {
 	if err := setInt64FromEnv(&cfg.BaseFee, EnvBaseFee); err != nil {
 		return err
 	}
+	if err := setIntFromEnv(&cfg.Retries, EnvRPCRetries); err != nil {
+		return err
+	}
 	return applyThresholdOverrideEnv(&cfg.ThresholdOverrides)
 }
 
@@ -466,6 +481,19 @@ func setInt64FromEnv(dst *int64, key string) error {
 		return nil
 	}
 	n, err := strconv.ParseInt(*v, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", key, err)
+	}
+	*dst = n
+	return nil
+}
+
+func setIntFromEnv(dst *int, key string) error {
+	v := lookup(key)
+	if v == nil {
+		return nil
+	}
+	n, err := strconv.Atoi(*v)
 	if err != nil {
 		return fmt.Errorf("parse %s: %w", key, err)
 	}
